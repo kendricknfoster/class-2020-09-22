@@ -14,6 +14,8 @@ Load **tidyverse**, **readxl* and **janitor** into your setup chunk.
 library(tidyverse)
 library(readxl)
 library(janitor)
+library(PPBDS.data)
+library(ggthemes)
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
@@ -40,7 +42,10 @@ sep_old <-
          title = course_title,
          name = course_name,
          department = course_department) %>% 
-  filter(u_grad > 10)
+  group_by(id, title, name, department) %>%
+  filter(u_grad > 10) %>%
+  summarize(total = sum(u_grad)) %>%
+  arrange(desc(total))
 
 # But this is not correct! Look for Gov 50: Data. What do you see? What can you
 # do to clean it up?
@@ -51,6 +56,23 @@ sep_old <-
 
 **Prompt:** Read in and clean the new data, creating an object called `sep_new`. 
 
+```{r sc1}
+sep_new <- 
+  read_excel("new_data/class_enrollment_summary_by_term_9-22-2020.xlsx", 
+             skip = 3) %>% 
+  clean_names() %>% 
+  filter(! is.na(course_title)) %>% 
+  select(-grad, -non_degree, -x_reg, -vus, -employee, 
+         -withdraw, -total, -instructor_full_name, -course_section_code) %>%
+  rename(id = course_id,
+         title = course_title,
+         name = course_name,
+         department = course_department) %>% 
+  group_by(id, title, name, department) %>%
+  filter(u_grad > 10) %>%
+  summarize(total = sum(u_grad)) %>%
+  arrange(desc(total))
+```
 
 
 ### Scene 2
@@ -60,17 +82,44 @@ sep_old <-
 
 Before we start on the model, Wisdom suggests we should:
 
-
+* What problem do we want to solve? Which courses have gained or lost people since September 1. 
+* What data is relevant? September 1 and September 22 enrollment.
+* What data is potentially missing? Workload in the first few weeks of class (how do we know? what are we measuring by? )
+* How are we considering courses that dropped below 10 courses? 
 
 
 After we have a model, Temperance suggests we should:
 
-
+* Recognize the differences between pset classes and reading classes
+* Recognize the effect of courses that dropped out of our dataset
 
 ### Scene 3
 
 **Prompt:** Which classes had the biggest increases and decreases in undergraduate enrollments between September 1 and today? Make a graphic that shows the 5 biggest increases and decreases. Make it look nice.
 
+```{r sc3}
+
+sep_old <- sep_old %>%
+  rename(total_old = total) 
+
+sep_new <- sep_new %>%
+  rename(total_new = total)
+
+inner_join(sep_old, sep_new, by = c("id", "title", "name", "department")) %>%
+  mutate(change = total_new - total_old) %>%
+  arrange(desc(change)) %>%
+  filter(change > 10 | change < -14) %>%
+  ggplot(aes(fct_reorder(title, change), change, fill = department)) +
+  geom_col() +
+  theme_clean() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Biggest Enrollment Changes in Fall 2020", 
+       x = "Course", 
+       y = "Change in Enrollment", 
+       caption = "Source: Harvard Office of the Registrar") +
+  coord_flip
+
+```
 
 
 
